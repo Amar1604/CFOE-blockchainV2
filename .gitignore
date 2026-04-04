@@ -10,7 +10,6 @@ env/
 
 # Environment and secrets
 .env
-.env.*
 !.env.example
 
 # Notebook and tool caches
@@ -59,7 +58,6 @@ build/
 
 # Environment files
 .env
-.env.*
 !.env.example
 
 # IDE files
@@ -79,5 +77,5 @@ Thumbs.db
 
 # Sensitive files (auto-detected)
 .env
-.env.example
+
 
