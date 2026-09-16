@@ -202,7 +202,7 @@ body::before{
     <button class="btn btn--reset" id="btn-reset" onclick="api('/simulation/reset','POST')">↺ Reset</button>
     <button class="btn btn--spike" id="btn-spike" onclick="api('/simulation/trigger-spike','POST')">⚡ Trigger Spike</button>
     <button class="btn btn--violation" id="btn-violation" onclick="api('/simulation/trigger-violation','POST')">⚠ Trigger Violation</button>
-    <button class="btn btn--audit" id="btn-audit" onclick="runAudit()">🔍 Run Audit & Send to CfoE</button>
+    <button class="btn btn--audit" id="btn-audit" onclick="runAudit()">📋 Fill CfoE Audit Form</button>
   </div>
 
   <!-- ═══ Metric cards ═══ -->
@@ -397,10 +397,25 @@ async function api(path, method = 'POST') {
 async function runAudit() {
   const btn = document.getElementById('btn-audit');
   btn.disabled = true;
-  btn.textContent = '⏳ Redirecting to CfoE…';
-  
-  // Redirect to home page first
-  window.location.href = '/?trigger_audit=true';
+  btn.textContent = '⏳ Fetching data…';
+
+  try {
+    const snap = await api('/simulation/snapshot', 'GET');
+    const payload = {
+      supplier_name: snap.supplier_name || '',
+      emissions: snap.estimated_annual_co2 || 0,
+      violations: snap.cumulative_violations || 0,
+      sector: 'default',
+      notes: 'Simulator audit, shift=' + (snap.shift || '') + ', spike=' + (snap.spike_active ? 'YES' : 'NO') + ', active_violations=' + (snap.active_violation_count || 0) + ', daily_co2=' + (snap.current_daily_co2 || 0) + 't, annual_est=' + (snap.estimated_annual_co2 || 0) + 't',
+    };
+    localStorage.setItem('cfoe_sim_prefill', JSON.stringify(payload));
+    btn.textContent = '✅ Redirecting to CfoE…';
+    window.location.href = 'http://localhost:8001/';
+  } catch (e) {
+    btn.disabled = false;
+    btn.textContent = '📋 Fill CfoE Audit Form';
+    console.error('Failed to fetch snapshot:', e);
+  }
 }
 
 /* ── Tick handler ─────────────────────────────────────────────────── */

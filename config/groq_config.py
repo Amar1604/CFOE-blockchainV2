@@ -11,7 +11,7 @@ load_dotenv()
 
 # Model constants
 MODEL_COMPOUND = "groq/compound"
-MODEL_LLAMA = "llama-3.3-70b-versatile"
+MODEL_LLAMA = "openai/gpt-oss-120b"
 
 def get_groq_client():
     """

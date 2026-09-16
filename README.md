@@ -90,6 +90,7 @@ TAVILY_API_KEY=your_tavily_api_key_here
 # Terminal 1: Main CfoE App
 uvicorn webapp:app --reload --port 8001
 # Open: http://localhost:8001
+# Open: http://localhost:8001/simulator
 
 # Terminal 2: Real-Time Simulator (Optional)
 uvicorn simulator.simulator:app --reload --port 8000
@@ -405,6 +406,12 @@ To fully utilize the pipeline alongside the real-time data generator, open two t
 4. Click **Start** to begin tracking live process emissions.
 5. Watch the ESG score continuously estimate based on annualized CO₂.
 6. Click **Run Audit & Send to CfoE** to instantly push current telemetry to the main app on port 8001.
+
+**Simulator Endpoints (port 8000):**
+- `/` - Dashboard UI
+- `/ws` - WebSocket for real-time data streaming
+- `/simulation/start`, `/simulation/stop`, `/simulation/reset` - Simulation control
+- `/audit/run` - Push audit to CfoE main app (port 8001)
 
 When submitting manually in the CfoE dashboard, use the Gazette-compliant fields:
 - **Sector:** Select industry (aluminium, refinery, petrochemicals, textiles, default)
@@ -839,7 +846,8 @@ python test_setup.py
 uvicorn webapp:app --reload --port 8001
 
 # Run Simulator on port 8000 (in a separate terminal)
- uvicorn simulator.simulator:app --reload --port 8000
+# Dashboard: http://localhost:8000/  |  WebSocket: ws://localhost:8000/ws
+uvicorn simulator.simulator:app --reload --port 8000
 ```
 
 ```bash

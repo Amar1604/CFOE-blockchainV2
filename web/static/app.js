@@ -1,4 +1,4 @@
-// CFOE Dashboard Application
+﻿// CFOE Dashboard Application
 
 (function () {
   'use strict';
@@ -2204,31 +2204,11 @@ ${item.report_text || 'No report generated.'}</div>
     syncSplitLayoutFromSession();
     updateChimneyRisk('Low Risk');
     
-    // Check if we should trigger simulator audit
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('trigger_audit') === 'true') {
-      // Remove the parameter from URL
-      window.history.replaceState({}, document.title, window.location.pathname);
-      
-      // Trigger the audit after a short delay
-      setTimeout(async () => {
-        try {
-          setStatus('Running simulator audit...');
-          showLogPanel();
-          const response = await fetch('/audit/run', { method: 'POST' });
-          if (response.ok) {
-            const result = await response.json();
-            await fetchMetrics();
-            await fetchBlockchainStatus();
-            await fetchHistory();
-            setStatus(`Simulator audit complete for ${result.supplier_name || 'supplier'}.`);
-          }
-        } catch (error) {
-          setStatus('Simulator audit failed: ' + error.message, true);
-        }
-      }, 500);
-    }
-    
+    // Capture simulator params from localStorage (set by simulator dashboard)
+    const simRaw = localStorage.getItem('cfoe_sim_prefill');
+    const simParams = simRaw ? JSON.parse(simRaw) : null;
+    if (simParams) localStorage.removeItem('cfoe_sim_prefill');
+
     let retries = 0;
     while (!window.walletManager && retries < 50) {
       await new Promise((resolve) => setTimeout(resolve, 100));
@@ -2245,7 +2225,22 @@ ${item.report_text || 'No report generated.'}</div>
     await fetchBlockchainStatus();
     await fetchHistory();
     await updateWalletStatus();
-    setStatus('Dashboard ready.');
+
+    // Apply simulator pre-fill after all data loads (so it isn't overwritten)
+    if (simParams) {
+      // Force split layout and run button visible regardless of session state
+      state.splitActivated = false;
+      activateSplitLayout();
+      elements.supplierName.value = simParams.supplier_name;
+      elements.emissions.value = simParams.emissions;
+      elements.violations.value = simParams.violations;
+      elements.sector.value = simParams.sector;
+      elements.notes.value = simParams.notes;
+      setStatus('Form pre-filled from simulator — review and click Run Audit.');
+      setTimeout(() => elements.supplierName.scrollIntoView({ behavior: 'smooth', block: 'center' }), 700);
+    } else {
+      setStatus('Dashboard ready.');
+    }
   };
 
   attachEventListeners();

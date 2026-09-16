@@ -579,6 +579,40 @@ def run_audit(req: AuditRequest) -> Dict[str, Any]:
     return result
 
 
+def _clean_text_for_pdf(text: str) -> str:
+    """Normalize special Unicode characters to standard ASCII/WinAnsi equivalents to prevent tofu (■) glyphs in ReportLab PDF."""
+    if not isinstance(text, str):
+        return str(text) if text is not None else ""
+    replacements = {
+        '\u2010': '-',   # hyphen
+        '\u2011': '-',   # non-breaking hyphen
+        '\u2012': '-',   # figure dash
+        '\u2013': '-',   # en dash
+        '\u2014': '-',   # em dash
+        '\u2015': '-',   # horizontal bar
+        '\u2212': '-',   # minus sign
+        '\u202f': ' ',   # narrow no-break space
+        '\u00a0': ' ',   # non-breaking space
+        '\u2009': ' ',   # thin space
+        '\u200a': ' ',   # hair space
+        '\u200b': '',    # zero-width space
+        '\u2018': "'",   # left single quotation mark
+        '\u2019': "'",   # right single quotation mark
+        '\u201a': "'",   # single low-9 quotation mark
+        '\u201b': "'",   # single high-reversed-9 quotation mark
+        '\u201c': '"',   # left double quotation mark
+        '\u201d': '"',   # right double quotation mark
+        '\u201e': '"',   # double low-9 quotation mark
+        '\u2026': '...', # horizontal ellipsis
+        '━': '-',
+        '•': '*',
+        
+    }
+    for orig, repl in replacements.items():
+        text = text.replace(orig, repl)
+    return text
+
+
 def _write_pdf(pdf_path: Path, result: Dict[str, Any]) -> None:
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.lib.units import inch
@@ -604,10 +638,10 @@ def _write_pdf(pdf_path: Path, result: Dict[str, Any]) -> None:
     
     # Summary Table with word wrapping
     summary_data = [
-        ['Audit ID:', Paragraph(result['audit_id'], styles['Normal'])],
-        ['Job ID:', Paragraph(result['job_id'], styles['Normal'])],
+        ['Audit ID:', Paragraph(_clean_text_for_pdf(result['audit_id']), styles['Normal'])],
+        ['Job ID:', Paragraph(_clean_text_for_pdf(result['job_id']), styles['Normal'])],
         ['Timestamp:', Paragraph(result['timestamp'][:19], styles['Normal'])],
-        ['Supplier:', Paragraph(result['supplier_name'], styles['Normal'])],
+        ['Supplier:', Paragraph(_clean_text_for_pdf(result['supplier_name']), styles['Normal'])],
         ['Emissions:', Paragraph(f"{result['emissions']} tons CO2", styles['Normal'])],
         ['Violations:', Paragraph(str(result['violations']), styles['Normal'])],
         ['Risk Score:', Paragraph(f"{result['risk_score']} ({result['classification']})", styles['Normal'])],
@@ -637,9 +671,9 @@ def _write_pdf(pdf_path: Path, result: Dict[str, Any]) -> None:
     story.append(Spacer(1, 0.1*inch))
     
     policy_data = [
-        ['Decision:', Paragraph(result['policy_decision'], styles['Normal'])],
-        ['Reason:', Paragraph(result['policy_reason'], styles['Normal'])],
-        ['Recommended Action:', Paragraph(result['recommended_action'], styles['Normal'])],
+        ['Decision:', Paragraph(_clean_text_for_pdf(result['policy_decision']), styles['Normal'])],
+        ['Reason:', Paragraph(_clean_text_for_pdf(result['policy_reason']), styles['Normal'])],
+        ['Recommended Action:', Paragraph(_clean_text_for_pdf(result['recommended_action']), styles['Normal'])],
     ]
     
     policy_table = Table(policy_data, colWidths=[1.5*inch, 4.5*inch])
@@ -679,12 +713,8 @@ def _write_pdf(pdf_path: Path, result: Dict[str, Any]) -> None:
     # Split report into lines and format properly
     report_lines = result['report_text'].split('\n')
     for line in report_lines:
-        line = line.strip()
+        line = _clean_text_for_pdf(line.strip())
         if line:
-            # Replace special characters that might cause issues
-            line = line.replace('━', '-')
-            line = line.replace('•', '*')
-            
             # Check if it's a section header (numbered or all caps)
             if line and (line[0].isdigit() or line.isupper() or line.startswith('---')):
                 header_style = ParagraphStyle(
@@ -898,7 +928,8 @@ async def create_audit(
         while not log_queue.empty():
             log_queue.get()
 
-        result = run_audit(payload)
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(None, run_audit, payload)
         result["download_links"] = export_audit_files(result)
     except Exception as exc:
         import traceback
