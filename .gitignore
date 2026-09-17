@@ -78,6 +78,5 @@ Thumbs.db
 # Sensitive files (auto-detected)
 .env
 CFoE_Research_Paper.tex
-agents/
 TODO.md
 RP/

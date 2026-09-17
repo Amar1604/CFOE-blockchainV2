@@ -1,7 +1,7 @@
 {
   "steelforge_industries_pvt._ltd.": {
     "supplier_name": "SteelForge Industries Pvt. Ltd.",
-    "total_credits": 1010,
+    "total_credits": 1080,
     "badge_history": [
       {
         "badge": "Green Champion",
@@ -142,9 +142,50 @@
       {
         "badge": "In Progress",
         "timestamp": "2026-09-16T19:49:01.574784+00:00"
+      },
+      {
+        "badge": "In Progress",
+        "timestamp": "2026-09-17T09:02:47.562005+00:00"
+      },
+      {
+        "badge": "Improver",
+        "timestamp": "2026-09-17T09:02:47.562005+00:00"
+      },
+      {
+        "badge": "In Progress",
+        "timestamp": "2026-09-17T09:02:55.611077+00:00"
       }
     ],
     "audit_streak": [
+      {
+        "esg_score": 0.5,
+        "credits_earned": 20,
+        "badges": [
+          "In Progress"
+        ],
+        "timestamp": "2026-09-17T09:02:55.611077+00:00"
+      },
+      {
+        "esg_score": 0.5,
+        "credits_earned": 50,
+        "badges": [
+          "In Progress",
+          "Improver"
+        ],
+        "timestamp": "2026-09-17T09:02:47.562005+00:00"
+      },
+      {
+        "esg_score": 0.8,
+        "credits_earned": 0,
+        "badges": [],
+        "timestamp": "2026-09-17T08:34:19.734152+00:00"
+      },
+      {
+        "esg_score": 0.8,
+        "credits_earned": 0,
+        "badges": [],
+        "timestamp": "2026-09-17T08:34:11.565566+00:00"
+      },
       {
         "esg_score": 0.8,
         "credits_earned": 0,
@@ -536,7 +577,7 @@
     "longest_streak": 2,
     "best_esg_score": 0.1,
     "worst_esg_score": 1.0,
-    "total_audits": 54,
+    "total_audits": 58,
     "credit_history": [
       {
         "credits_earned": 100,
@@ -1085,6 +1126,47 @@
         "streak_bonus": 0,
         "improvement_bonus": 0,
         "timestamp": "2026-09-16T19:52:13.412338+00:00"
+      },
+      {
+        "credits_earned": 0,
+        "running_total": 1010,
+        "esg_score": 0.8,
+        "badges": [],
+        "streak_bonus": 0,
+        "improvement_bonus": 0,
+        "timestamp": "2026-09-17T08:34:11.565566+00:00"
+      },
+      {
+        "credits_earned": 0,
+        "running_total": 1010,
+        "esg_score": 0.8,
+        "badges": [],
+        "streak_bonus": 0,
+        "improvement_bonus": 0,
+        "timestamp": "2026-09-17T08:34:19.734152+00:00"
+      },
+      {
+        "credits_earned": 50,
+        "running_total": 1060,
+        "esg_score": 0.5,
+        "badges": [
+          "In Progress",
+          "Improver"
+        ],
+        "streak_bonus": 0,
+        "improvement_bonus": 30,
+        "timestamp": "2026-09-17T09:02:47.562005+00:00"
+      },
+      {
+        "credits_earned": 20,
+        "running_total": 1080,
+        "esg_score": 0.5,
+        "badges": [
+          "In Progress"
+        ],
+        "streak_bonus": 0,
+        "improvement_bonus": 0,
+        "timestamp": "2026-09-17T09:02:55.611077+00:00"
       }
     ]
   },

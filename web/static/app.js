@@ -1,4 +1,4 @@
-﻿// CFOE Dashboard Application
+// CFOE Dashboard Application
 
 (function () {
   'use strict';
@@ -1107,27 +1107,38 @@ ${item.report_text || 'No report generated.'}</div>
     const statusClass = isPaid ? 'report-unlocked' : 'report-locked';
 
     if (isPaid) {
+      const txHash = item.payment_tx_id || '';
       return `
         <div class="x402-report-access ${statusClass}">
           <div class="x402-status">
             <span class="x402-icon">${lockIcon}</span>
             <span class="x402-text">${statusText}</span>
+            <span class="x402-price-paid">✓ 0.02 ALGO Paid</span>
           </div>
+          ${txHash ? `
+            <div class="x402-tx-display">
+              <span class="x402-tx-title">⚡ On-Chain TX Hash:</span>
+              <a href="https://lora.algokit.io/testnet/transaction/${txHash}" target="_blank" rel="noopener" class="mono x402-hash-link" title="View Transaction on Algorand Testnet Explorer">
+                ${txHash}
+              </a>
+              <button type="button" class="x402-copy-tx-btn" data-hash="${txHash}">📋 Copy</button>
+            </div>
+          ` : ''}
         </div>
       `;
     }
 
     return `
-      <div class="x402-report-access ${statusClass}">
+      <div class="x402-report-access ${statusClass}" id="x402-box-${item.audit_id}">
         <div class="x402-status">
           <span class="x402-icon">${lockIcon}</span>
           <span class="x402-text">${statusText}</span>
           <span class="x402-price">0.02 ALGO</span>
         </div>
-        <button type="button" class="x402-unlock-btn" data-audit-id="${item.audit_id}">
-          💳 Buy Report Access
+        <button type="button" class="x402-unlock-btn" id="unlock-btn-${item.audit_id}" data-audit-id="${item.audit_id}">
+          💳 Buy Report Access (0.02 ALGO)
         </button>
-        <p class="x402-hint">Unlock full executive report with blockchain payment</p>
+        <p class="x402-hint" id="unlock-hint-${item.audit_id}">Instant 1-Click Purchase &bull; Broadcasts real on-chain transaction &bull; Unlocks executive analysis</p>
       </div>
     `;
   };
@@ -1137,79 +1148,103 @@ ${item.report_text || 'No report generated.'}</div>
     if (unlockBtn) {
       unlockBtn.addEventListener('click', () => handleReportUnlock(item.audit_id));
     }
+
+    const copyTxBtn = document.querySelector(`.x402-copy-tx-btn[data-hash]`);
+    if (copyTxBtn) {
+      copyTxBtn.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(copyTxBtn.dataset.hash);
+          copyTxBtn.textContent = '✓ Copied!';
+          setTimeout(() => { if (copyTxBtn) copyTxBtn.textContent = '📋 Copy'; }, 2000);
+        } catch (e) {
+          setStatus('TX Hash copied to clipboard');
+        }
+      });
+    }
   };
 
   const handleReportUnlock = async (auditId) => {
-    if (!state.walletStatus.connected) {
-      setStatus('Please connect wallet first to unlock reports', true);
-      return;
+    const btn = document.getElementById(`unlock-btn-${auditId}`) || document.querySelector(`.x402-unlock-btn[data-audit-id="${auditId}"]`);
+    const hint = document.getElementById(`unlock-hint-${auditId}`);
+
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = `⏳ Sending 0.02 ALGO on Algorand Testnet...`;
+      btn.style.opacity = '0.85';
+      btn.style.cursor = 'wait';
     }
+    if (hint) {
+      hint.textContent = 'Broadcasting transaction and confirming on Algorand blockchain...';
+      hint.style.color = '#f5b550';
+    }
+
+    showLoading('Broadcasting 0.02 ALGO payment on Algorand Testnet...');
+    setStatus('Sending payment on Algorand blockchain...');
 
     try {
-      showLoading('Processing payment for report access...');
-      setStatus('Sending 0.02 ALGO payment...');
-
-      // Step 1: Get reporting agent address
-      const agentRes = await fetch('/api/agent-wallets');
-      if (!agentRes.ok) throw new Error('Failed to get agent wallets');
-      const agentData = await agentRes.json();
-      const reportingAgent = agentData.agents?.reporting_agent;
-      if (!reportingAgent?.address) {
-        throw new Error('Reporting agent wallet not found');
-      }
-
-      // Step 2: Send payment using wallet manager
-      if (!window.walletManager || !window.walletManager.wallet) {
-        throw new Error('Wallet not connected');
-      }
-
-      const paymentResult = await window.walletManager.sendPayment(
-        reportingAgent.address,
-        0.02,
-        `CfoE Report Access: ${auditId}`
-      );
-
-      if (!paymentResult.success) {
-        throw new Error(paymentResult.error || 'Payment failed');
-      }
-
-      setStatus('Payment sent! Confirming on blockchain...');
-
-      // Step 3: Confirm payment with backend
-      const response = await fetch(`/api/report/${auditId}/pay`, {
+      const response = await fetch(`/api/report/${auditId}/sponsor-pay`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tx_id: paymentResult.txId }),
       });
 
+      const data = await response.json();
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || 'Payment confirmation failed');
+        throw new Error(data.detail || 'Payment failed');
       }
 
-      const result = await response.json();
-      
-      if (result.status === 'pending') {
-        setStatus('Payment pending confirmation. Please wait a few seconds and try again.');
-        hideLoading();
-        return;
+      const txId = data.tx_id || '';
+      setStatus(`✓ Payment confirmed on-chain! TX: ${txId.slice(0, 16)}...`);
+
+      // Update state
+      const audit = state.audits.find(a => a.audit_id === auditId);
+      if (audit) {
+        audit.report_paid = true;
+        audit.report_encrypted = true;
+        audit.payment_tx_id = txId;
+        if (data.report_text) {
+          audit.report_text = data.report_text;
+        }
       }
 
-      setStatus(`Report unlocked! TX: ${paymentResult.txId.substring(0, 16)}...`);
+      // Update current DOM view
+      const reportContent = document.getElementById(`report-content-${auditId}`);
+      if (reportContent && data.report_text) {
+        reportContent.textContent = data.report_text;
+      }
+      const reportWrap = document.getElementById(`analysis-${auditId}`);
+      if (reportWrap) {
+        reportWrap.hidden = false;
+      }
+      const toggleBtn = document.getElementById(`analysis-toggle-${auditId}`);
+      if (toggleBtn) {
+        toggleBtn.textContent = 'Hide Analysis';
+      }
 
-      // Refresh the audit to show unlocked state
+      // Re-render latest view so unlocked status and TX hash display immediately
+      const updated = state.audits.find(a => a.audit_id === auditId);
+      if (updated) {
+        renderLatest(updated);
+      }
+
+      // Refresh history in background
       await fetchHistory();
-      const updatedAudit = state.audits.find(a => a.audit_id === auditId);
-      if (updatedAudit) {
-        renderLatest(updatedAudit);
+      hideLoading();
+    } catch (err) {
+      hideLoading();
+      setStatus(`Payment failed: ${err.message}`, true);
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = `💳 Buy Report Access (0.02 ALGO)`;
+        btn.style.opacity = '1';
+        btn.style.cursor = 'pointer';
       }
-
-      hideLoading();
-    } catch (error) {
-      setStatus(error.message, true);
-      hideLoading();
+      if (hint) {
+        hint.textContent = `Error: ${err.message}. Click to retry.`;
+        hint.style.color = '#ff7b7b';
+      }
     }
   };
+
 
   // ============================================
   // Wallet Functions

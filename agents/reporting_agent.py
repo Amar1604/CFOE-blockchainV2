@@ -168,6 +168,8 @@ def get_report_blob(audit_id: str) -> Optional[Dict[str, Any]]:
         "encrypted_blob": entry["encrypted_blob"],
         "payment_amount_algo": entry["payment_amount_algo"],
         "paid": entry["paid"],
+        "payment_tx_id": entry.get("payment_tx_id"),
+        "paid_at": entry.get("paid_at"),
         "created_at": entry["created_at"],
     }
 

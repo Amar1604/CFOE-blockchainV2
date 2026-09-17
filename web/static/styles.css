@@ -2151,6 +2151,66 @@ tbody tr {
   border-radius: 8px;
 }
 
+.x402-price-paid {
+  margin-left: auto;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #3aa471;
+  font-family: "IBM Plex Mono", monospace;
+  padding: 4px 10px;
+  background: rgba(58, 164, 113, 0.15);
+  border-radius: 8px;
+}
+
+.x402-tx-display {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(58, 164, 113, 0.3);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+
+.x402-tx-title {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #89e2b5;
+  white-space: nowrap;
+}
+
+.x402-hash-link {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.78rem;
+  color: #3aa471;
+  word-break: break-all;
+  text-decoration: underline;
+  flex: 1;
+}
+
+.x402-hash-link:hover {
+  color: #44be83;
+}
+
+.x402-copy-tx-btn {
+  background: #2b6b54;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.2s;
+}
+
+.x402-copy-tx-btn:hover {
+  background: #3aa471;
+}
+
 .x402-unlock-btn {
   padding: 12px 20px;
   font-size: 0.95rem;
@@ -2181,6 +2241,237 @@ tbody tr {
   text-align: center;
   font-style: italic;
 }
+
+/* ── X402 Report Payment Modal ─────────────────────────────────────── */
+.x402-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: rgba(10, 25, 20, 0.75);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.x402-modal-dialog {
+  background: #14221d;
+  color: #e5f4ee;
+  border-radius: 18px;
+  padding: 24px;
+  max-width: 520px;
+  width: 100%;
+  box-shadow: 0 25px 70px rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(89, 184, 137, 0.3);
+  font-family: inherit;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(20px) scale(0.97);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+.x402-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(89, 184, 137, 0.2);
+  padding-bottom: 12px;
+}
+
+.x402-modal-head h3 {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #89e2b5;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.x402-modal-close-btn {
+  background: transparent;
+  border: none;
+  color: #89b8a0;
+  font-size: 1.5rem;
+  cursor: pointer;
+  line-height: 1;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+
+.x402-modal-close-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.x402-step-box {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(89, 184, 137, 0.15);
+  border-radius: 12px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.x402-step-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #89e2b5;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.x402-addr-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(89, 184, 137, 0.2);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.x402-addr-row code {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.78rem;
+  color: #c9ede0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.x402-copy-btn {
+  background: #2b6b54;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.x402-copy-btn:hover {
+  background: #3aa471;
+}
+
+.x402-modal-input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(89, 184, 137, 0.3);
+  background: rgba(0, 0, 0, 0.35);
+  color: #fff;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.82rem;
+  box-sizing: border-box;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.x402-modal-input:focus {
+  border-color: #3aa471;
+  box-shadow: 0 0 0 2px rgba(58, 164, 113, 0.25);
+}
+
+.x402-primary-btn {
+  width: 100%;
+  padding: 12px;
+  border-radius: 10px;
+  background: linear-gradient(120deg, #3aa471, #2b6b54);
+  color: #fff;
+  border: none;
+  font-weight: 700;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 14px rgba(43, 107, 84, 0.35);
+}
+
+.x402-primary-btn:hover {
+  background: linear-gradient(120deg, #44be83, #327e63);
+  transform: translateY(-1px);
+}
+
+.x402-divider {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  color: rgba(200, 228, 214, 0.4);
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin: 4px 0;
+}
+
+.x402-divider::before,
+.x402-divider::after {
+  content: '';
+  flex: 1;
+  border-bottom: 1px solid rgba(89, 184, 137, 0.15);
+}
+
+.x402-divider span {
+  padding: 0 10px;
+  letter-spacing: 0.05em;
+}
+
+.x402-sponsor-btn {
+  width: 100%;
+  padding: 10px;
+  border-radius: 10px;
+  background: linear-gradient(120deg, #da8a43, #e9a53f);
+  color: #fff;
+  border: none;
+  font-weight: 600;
+  font-size: 0.88rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 12px rgba(218, 138, 67, 0.25);
+}
+
+.x402-sponsor-btn:hover {
+  background: linear-gradient(120deg, #e9a53f, #f5b550);
+  transform: translateY(-1px);
+}
+
+.x402-modal-status {
+  font-size: 0.82rem;
+  min-height: 18px;
+  text-align: center;
+  transition: all 0.2s;
+}
+
+.x402-modal-status.error {
+  color: #ff7b7b;
+}
+
+.x402-modal-status.success {
+  color: #89e2b5;
+}
+
+.x402-modal-status.pending {
+  color: #f5b550;
+}
+
 
 /* ── Revenue Dashboard ─────────────────────────────────────────────── */
 
