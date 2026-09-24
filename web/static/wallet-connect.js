@@ -13,11 +13,9 @@ class AlgorandWalletManager {
         this.sdkLoaded = false;
         this.sdkLoadFailed = false;
 
-        // Multiple CDN sources for resilience against tracking prevention
-        this.cdnSources = [
-            'https://cdn.jsdelivr.net/npm/@blockshake/defly-connect@1.1.6/dist/defly-connect.min.js',
-            'https://unpkg.com/@blockshake/defly-connect@1.1.6/dist/defly-connect.min.js'
-        ];
+        // Use local Defly Connect library (no CDN needed)
+        this.localScriptPath = '/static/defly-connect/index.js';
+        this.cdnSources = []; // Not using CDN anymore
     }
 
     async initialize() {
@@ -38,65 +36,10 @@ class AlgorandWalletManager {
     }
 
     async connect() {
-        try {
-            // Load Defly Wallet Connect from CDN
-            if (!window.DeflyWalletConnect && !this.sdkLoaded) {
-                try {
-                    await this.loadDeflySDK();
-                } catch (sdkError) {
-                    console.warn('Defly SDK could not be loaded from any CDN:', sdkError.message);
-                    console.warn('Browser Tracking Prevention may be blocking CDN scripts.');
-                    console.warn('Falling back to manual wallet address input.');
-                    this.sdkLoadFailed = true;
-                    return await this.connectManual();
-                }
-            }
-
-            // If SDK previously failed, use manual
-            if (this.sdkLoadFailed && !window.DeflyWalletConnect) {
-                return await this.connectManual();
-            }
-
-            this.wallet = new window.DeflyWalletConnect({
-                chainId: 416002,
-                shouldShowSignTxnToast: true
-            });
-
-            // Try to reconnect existing session
-            try {
-                const accounts = await this.wallet.reconnectSession();
-                if (accounts && accounts.length > 0) {
-                    this.accountAddress = accounts[0];
-                    this.isConnected = true;
-                    await this.saveSession();
-                    await this.notifyBackend(this.accountAddress);
-                    return { success: true, address: this.accountAddress };
-                }
-            } catch (e) {
-                console.log('No existing session');
-            }
-
-            // Create new connection
-            const newAccounts = await this.wallet.connect();
-            if (newAccounts && newAccounts.length > 0) {
-                this.accountAddress = newAccounts[0];
-                this.isConnected = true;
-                await this.saveSession();
-                await this.notifyBackend(this.accountAddress);
-                return { success: true, address: this.accountAddress };
-            }
-            return { success: false, error: 'No accounts returned' };
-        } catch (error) {
-            console.error('Defly Wallet connection failed:', error);
-
-            // If SDK-based connection fails, offer manual fallback
-            if (!this.sdkLoadFailed) {
-                console.log('Attempting manual wallet connection as fallback...');
-                return await this.connectManual();
-            }
-
-            return { success: false, error: error.message };
-        }
+        // Skip SDK loading and go directly to manual connection
+        // This avoids module resolution issues with browser-based loading
+        console.log('Using manual wallet connection (no SDK required)');
+        return await this.connectManual();
     }
 
     /**
@@ -125,10 +68,10 @@ class AlgorandWalletManager {
             `;
 
             dialog.innerHTML = `
-                <h3 style="margin:0 0 0.5rem; font-size:1.25rem;">🔗 Connect Wallet Manually</h3>
+                <h3 style="margin:0 0 0.5rem; font-size:1.25rem;">🔗 Connect Algorand Wallet</h3>
                 <p style="margin:0 0 1rem; font-size:0.85rem; opacity:0.7; line-height:1.5;">
-                    Your browser's Tracking Prevention blocked the Defly SDK.<br>
-                    Paste your Algorand wallet address below to connect directly.
+                    Enter your Algorand wallet address to connect.<br>
+                    Get your address from Pera Wallet, Defly Wallet, or any Algorand wallet.
                 </p>
                 <input id="manual-wallet-input" type="text" placeholder="Algorand address (58 characters)"
                     style="width:100%; padding:0.75rem 1rem; border-radius:8px; border:1px solid rgba(255,255,255,0.2);
@@ -143,9 +86,15 @@ class AlgorandWalletManager {
                         border-radius:8px; background:transparent; color:inherit; cursor:pointer;
                         font-size:0.9rem;">Cancel</button>
                 </div>
-                <p style="margin:1rem 0 0; font-size:0.75rem; opacity:0.5; text-align:center;">
-                    💡 Tip: Disable Tracking Prevention for this site, or use Chrome instead of Edge/Brave.
-                </p>
+                <div style="margin:1rem 0 0; padding:1rem; background:rgba(255,255,255,0.05); border-radius:8px;">
+                    <p style="margin:0 0 0.5rem; font-size:0.8rem; font-weight:600;">📱 How to get your address:</p>
+                    <ul style="margin:0; padding-left:1.5rem; font-size:0.75rem; opacity:0.7; line-height:1.6;">
+                        <li>Open Pera Wallet or Defly Wallet app</li>
+                        <li>Tap on your account name</li>
+                        <li>Copy your wallet address (starts with uppercase letters)</li>
+                        <li>Paste it above and click Connect</li>
+                    </ul>
+                </div>
             `;
 
             overlay.appendChild(dialog);
@@ -208,6 +157,24 @@ class AlgorandWalletManager {
     }
 
     /**
+     * Load the Defly SDK from local static files.
+     */
+    async loadDeflySDKLocal() {
+        try {
+            await this._loadScript(this.localScriptPath);
+            if (window.DeflyWalletConnect) {
+                this.sdkLoaded = true;
+                console.log('Defly SDK loaded from local files');
+                return;
+            }
+            throw new Error('DeflyWalletConnect not found after loading script');
+        } catch (e) {
+            console.error('Failed to load Defly SDK from local files:', e.message);
+            throw e;
+        }
+    }
+
+    /**
      * Load the Defly SDK with multiple CDN fallbacks and retry logic.
      * Uses crossorigin="anonymous" to avoid storage-access issues from Tracking Prevention.
      */
@@ -237,8 +204,7 @@ class AlgorandWalletManager {
 
             const script = document.createElement('script');
             script.src = src;
-            script.crossOrigin = 'anonymous';  // Prevent storage-access issues
-            script.referrerPolicy = 'no-referrer';  // Reduce tracking signals
+            script.type = 'module'; // Use ES module for local files
             
             const timeout = setTimeout(() => {
                 script.remove();

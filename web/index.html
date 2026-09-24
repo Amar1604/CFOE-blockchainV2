@@ -16,23 +16,56 @@
 <body>
     <div class="ambient ambient-a"></div>
     <div class="ambient ambient-b"></div>
+    <div class="noise-overlay" aria-hidden="true"></div>
+    
+    <div id="loading-banner" class="loading-banner" style="display: none;">
+        <div class="loading-content">
+            <div class="loading-spinner"></div>
+            <span id="loading-text">Processing...</span>
+        </div>
+    </div>
 
     <main class="container">
         <header class="hero">
             <div class="hero-content">
                 <p class="hero-kicker">CfoE</p>
-                <h1>Supply Chain Carbon Control Room</h1>
+                <h1>Supply Chain Carbon <span>Control Room</span></h1>
                 <p class="hero-sub">Launch ESG audits on fresh supplier data, track risk movement, and compare decisions
                     side by side.</p>
+                <div class="hero-meta" aria-label="Platform capabilities">
+                    <span class="hero-chip">Live Blockchain Anchors</span>
+                    <span class="hero-chip">Human-in-the-Loop Reviews</span>
+                    <span class="hero-chip">Trajectory Intelligence</span>
+                </div>
             </div>
             <button id="connect-wallet-btn" type="button" class="wallet-btn header-wallet-btn">
                 <span id="wallet-address" class="wallet-address">Connect Defly Wallet</span>
             </button>
         </header>
 
+        <section class="hero-meta-strip" aria-label="Operational context">
+            <article class="meta-tile">
+                <h3>Mission</h3>
+                <p>Keep supplier emissions accountable with transparent, auditable ESG workflows.</p>
+            </article>
+            <article class="meta-tile">
+                <h3>Decision Loop</h3>
+                <p>Automated policy judgment escalates critical outcomes for mandatory human approval.</p>
+            </article>
+            <article class="meta-tile">
+                <h3>Verification Layer</h3>
+                <p>Scores and report artifacts can be verified against on-chain records in real time.</p>
+            </article>
+        </section>
+
         <nav class="tab-nav" id="tab-nav">
             <button class="tab-btn active" data-tab="dashboard">Dashboard</button>
             <button class="tab-btn" data-tab="leaderboard">Leaderboard</button>
+            <button class="tab-btn" data-tab="tokens">Carbon Tokens</button>
+            <button class="tab-btn" data-tab="revenue">💰 Revenue</button>
+            <a href="/simulator" class="simulator-link" title="Open Real-Time Simulator">
+                <button class="tab-btn simulator-btn" type="button">🔴 Live Simulator</button>
+            </a>
         </nav>
 
         <div id="tab-dashboard" class="tab-content active">
@@ -116,13 +149,17 @@
                 <div id="results-tile-wrap" class="results-tile-wrap">
                     <section class="panel metrics-panel">
                         <h2>Portfolio Metrics</h2>
+                        <p class="panel-sub">Portfolio-wide ESG posture and system health snapshot.</p>
                         <div id="metrics" class="metrics-grid"></div>
+                        <div id="blockchain-status" class="blockchain-status"></div>
                     </section>
 
                     <section class="panel latest-panel">
                         <h2>Latest Result</h2>
+                        <p class="panel-sub">Most recent audit output with explainability and traceability details.</p>
                         <div id="latest-result" class="latest-empty">No audit executed yet.</div>
                         <div id="blockchain-info" class="blockchain-info" style="display: none;"></div>
+                        <div id="trajectory-info" class="trajectory-shell"></div>
                     </section>
 
                     <section class="panel approval-panel" id="approval-panel" style="display: none;">
@@ -174,6 +211,261 @@
                         <p class="hint">Select exactly 2 history rows.</p>
                         <div id="compare-box" class="compare-box">No pair selected.</div>
                     </section>
+                </div>
+            </section>
+        </div>
+
+        <div id="tab-tokens" class="tab-content">
+            <section class="panel token-overview-panel">
+                <h2>💰 Carbon Credit Token Overview</h2>
+                <div class="token-stats-grid">
+                    <div class="token-stat-card">
+                        <div class="token-stat-label">Token ID</div>
+                        <div class="token-stat-value" id="token-overview-id">Not Created</div>
+                        <button id="optin-token-btn" class="token-btn" style="margin-top: 8px; font-size: 0.8rem; padding: 6px 12px; display: none;">Opt-In to Receive</button>
+                    </div>
+                    <div class="token-stat-card">
+                        <div class="token-stat-label">Your Balance</div>
+                        <div class="token-stat-value" id="token-overview-balance">0 CCT</div>
+                        <div class="token-stat-sub" id="token-overview-credits">0 tons CO2eq</div>
+                    </div>
+                    <div class="token-stat-card">
+                        <div class="token-stat-label">Total Issued</div>
+                        <div class="token-stat-value" id="token-overview-issued">0 tons</div>
+                    </div>
+                    <div class="token-stat-card">
+                        <div class="token-stat-label">Total Retired</div>
+                        <div class="token-stat-value" id="token-overview-retired">0 tons</div>
+                    </div>
+                </div>
+                <div class="token-info-box">
+                    <h4>📊 Token Economics</h4>
+                    <p><strong>1 CCT Token = 10 tons CO2eq</strong></p>
+                    <p>Suppliers earn CCT tokens for verified emission reductions. Tokens can be traded or retired for carbon offsetting.</p>
+                    <p style="margin-top: 8px; font-size: 0.85rem; color: #d15252;"><strong>⚠️ Important:</strong> Recipients must opt-in before receiving tokens. Click "Opt-In to Receive" button above if you see a token ID.</p>
+                </div>
+            </section>
+
+            <section class="panel token-actions-panel">
+                <h2>🔧 Token Management</h2>
+                <div class="token-actions-grid">
+                    <div class="token-action-card">
+                        <h3>✅ Opt-In to Receive Tokens</h3>
+                        <p>Recipients must opt-in before receiving tokens (one-time setup)</p>
+                        <form id="optin-form">
+                            <label>
+                                Asset ID
+                                <input type="number" id="optin-asset-id" placeholder="758777881" required />
+                            </label>
+                            <button type="submit" class="token-btn">Opt-In Now</button>
+                        </form>
+                        <p style="margin-top: 8px; font-size: 0.85rem; color: #888;">💡 Tip: Get the Asset ID from the Token Overview above</p>
+                    </div>
+
+                    <div class="token-action-card">
+                        <h3>🏭 Create Token</h3>
+                        <p>Initialize the carbon credit token system</p>
+                        <form id="create-token-form">
+                            <label>
+                                Total Supply (tons CO2eq)
+                                <input type="number" id="token-total-supply" value="10000000" min="1000" required />
+                            </label>
+                            <label>
+                                Token Symbol
+                                <input type="text" id="token-symbol" value="CCT" maxlength="8" required />
+                            </label>
+                            <label>
+                                Token Name
+                                <input type="text" id="token-name" value="CfoE Carbon Credit" maxlength="32" required />
+                            </label>
+                            <button type="submit" class="token-btn">Create Token</button>
+                        </form>
+                    </div>
+
+                    <div class="token-action-card">
+                        <h3>📤 Issue Credits</h3>
+                        <p>Award tokens to suppliers for emission reductions</p>
+                        <form id="issue-credits-form">
+                            <label>
+                                Recipient Address
+                                <input type="text" id="issue-recipient" placeholder="Algorand address" required />
+                                <button type="button" id="use-my-address-btn" class="token-btn" style="margin-top: 4px; font-size: 0.75rem; padding: 4px 8px;">Use My Address</button>
+                            </label>
+                            <label>
+                                Carbon Credits (tons CO2eq)
+                                <input type="number" id="issue-amount" placeholder="5000" min="1" step="0.1" required />
+                            </label>
+                            <label>
+                                Reason
+                                <input type="text" id="issue-reason" placeholder="Q1 2024 emission reduction" maxlength="200" required />
+                            </label>
+                            <label>
+                                Audit ID (optional)
+                                <input type="text" id="issue-audit-id" placeholder="AUD-12345" />
+                            </label>
+                            <button type="submit" class="token-btn">Issue Credits</button>
+                        </form>
+                    </div>
+
+                    <div class="token-action-card">
+                        <h3>🔥 Retire Credits</h3>
+                        <p>Permanently burn tokens for carbon offsetting</p>
+                        <form id="retire-credits-form">
+                            <label>
+                                Carbon Credits (tons CO2eq)
+                                <input type="number" id="retire-amount" placeholder="1000" min="1" step="0.1" required />
+                            </label>
+                            <label>
+                                Reason
+                                <input type="text" id="retire-reason" placeholder="2024 Q1 carbon offset" maxlength="200" required />
+                            </label>
+                            <label>
+                                Beneficiary
+                                <input type="text" id="retire-beneficiary" placeholder="Company name" maxlength="100" required />
+                            </label>
+                            <button type="submit" class="token-btn danger">Retire Credits</button>
+                        </form>
+                    </div>
+
+                    <div class="token-action-card">
+                        <h3>🎨 Create Audit NFT</h3>
+                        <p>Generate certificate NFT for completed audit</p>
+                        <form id="create-nft-form">
+                            <label>
+                                Supplier Name
+                                <input type="text" id="nft-supplier" placeholder="GreenCorp" required />
+                            </label>
+                            <label>
+                                Audit ID
+                                <input type="text" id="nft-audit-id" placeholder="AUD-12345" required />
+                            </label>
+                            <label>
+                                Risk Score
+                                <input type="number" id="nft-risk-score" placeholder="0.25" min="0" max="1" step="0.01" required />
+                            </label>
+                            <label>
+                                Classification
+                                <select id="nft-classification" required>
+                                    <option value="Low Risk">Low Risk</option>
+                                    <option value="Moderate Risk">Moderate Risk</option>
+                                    <option value="Critical Risk">Critical Risk</option>
+                                </select>
+                            </label>
+                            <label>
+                                Emissions (tons CO2)
+                                <input type="number" id="nft-emissions" placeholder="2500" min="0" required />
+                            </label>
+                            <button type="submit" class="token-btn">Create NFT</button>
+                        </form>
+                    </div>
+
+                    <div class="token-action-card">
+                        <h3>🔍 Check Balance</h3>
+                        <p>Look up token balance for any Algorand address</p>
+                        <form id="check-balance-form">
+                            <label>
+                                Algorand Address
+                                <input type="text" id="check-balance-address" placeholder="Paste any Algorand address" required />
+                            </label>
+                            <button type="submit" class="token-btn">Check Balance</button>
+                        </form>
+                        <div id="check-balance-result" style="margin-top: 12px; display: none;">
+                            <div style="background: rgba(0,255,136,0.08); border: 1px solid rgba(0,255,136,0.2); border-radius: 8px; padding: 12px;">
+                                <p style="margin: 0 0 4px 0; font-size: 0.85rem; color: #888;">Token Balance</p>
+                                <p style="margin: 0; font-size: 1.4rem; font-weight: 700;" id="check-balance-tokens">0 CCT</p>
+                                <p style="margin: 4px 0 0 0; font-size: 0.9rem; color: #aaa;" id="check-balance-credits">0 tons CO2eq</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="panel token-history-panel">
+                <h2>📜 Transaction History</h2>
+                <div class="token-history-tabs">
+                    <button class="token-history-tab active" data-history-tab="issued">Issued</button>
+                    <button class="token-history-tab" data-history-tab="received">Received</button>
+                    <button class="token-history-tab" data-history-tab="retired">Retired</button>
+                    <button class="token-history-tab" data-history-tab="nfts">NFTs</button>
+                </div>
+                <div id="token-history-issued" class="token-history-content active">
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Recipient</th>
+                                    <th>Credits (tons)</th>
+                                    <th>Tokens (CCT)</th>
+                                    <th>Reason</th>
+                                    <th>Audit ID</th>
+                                    <th>TX ID</th>
+                                    <th>Date</th>
+                                </tr>
+                            </thead>
+                            <tbody id="token-issued-body">
+                                <tr><td colspan="7" class="lb-empty">No credits issued yet</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div id="token-history-received" class="token-history-content">
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>From</th>
+                                    <th>Credits (tons)</th>
+                                    <th>Tokens (CCT)</th>
+                                    <th>Reason</th>
+                                    <th>Audit ID</th>
+                                    <th>TX ID</th>
+                                    <th>Date</th>
+                                </tr>
+                            </thead>
+                            <tbody id="token-received-body">
+                                <tr><td colspan="7" class="lb-empty">No credits received yet</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div id="token-history-retired" class="token-history-content">
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Credits (tons)</th>
+                                    <th>Tokens (CCT)</th>
+                                    <th>Reason</th>
+                                    <th>Beneficiary</th>
+                                    <th>TX ID</th>
+                                    <th>Date</th>
+                                </tr>
+                            </thead>
+                            <tbody id="token-retired-body">
+                                <tr><td colspan="6" class="lb-empty">No credits retired yet</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div id="token-history-nfts" class="token-history-content">
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Asset ID</th>
+                                    <th>Supplier</th>
+                                    <th>Audit ID</th>
+                                    <th>Risk Score</th>
+                                    <th>Classification</th>
+                                    <th>TX ID</th>
+                                    <th>Date</th>
+                                </tr>
+                            </thead>
+                            <tbody id="token-nfts-body">
+                                <tr><td colspan="7" class="lb-empty">No NFTs created yet</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </section>
         </div>
@@ -246,6 +538,107 @@
                             <p>ESG improved by &gt;0.15 — +30 bonus</p>
                         </div>
                     </div>
+                </div>
+            </section>
+        </div>
+
+        <div id="tab-revenue" class="tab-content">
+            <section class="panel revenue-overview-panel">
+                <div class="revenue-header">
+                    <h2>💰 Agentic Commerce Revenue</h2>
+                    <span class="revenue-subtitle">X402 micropayment ledger — auto-refreshes every 30 s</span>
+                </div>
+
+                <div class="revenue-kpi-grid">
+                    <div class="revenue-kpi-card">
+                        <span class="revenue-kpi-icon">⚡</span>
+                        <div class="revenue-kpi-label">Total ALGO Earned</div>
+                        <div class="revenue-kpi-value" id="rev-total-earned">0.000000</div>
+                        <div class="revenue-kpi-sub">across all agents</div>
+                    </div>
+                    <div class="revenue-kpi-card">
+                        <span class="revenue-kpi-icon">🔍</span>
+                        <div class="revenue-kpi-label">Audits Paid</div>
+                        <div class="revenue-kpi-value" id="rev-audits-paid">0</div>
+                        <div class="revenue-kpi-sub">0.05 ALGO per audit</div>
+                    </div>
+                    <div class="revenue-kpi-card">
+                        <span class="revenue-kpi-icon">📄</span>
+                        <div class="revenue-kpi-label">Reports Sold</div>
+                        <div class="revenue-kpi-value" id="rev-reports-sold">0</div>
+                        <div class="revenue-kpi-sub">0.02 ALGO per report</div>
+                    </div>
+                    <div class="revenue-kpi-card">
+                        <span class="revenue-kpi-icon">📊</span>
+                        <div class="revenue-kpi-label">Total Payments</div>
+                        <div class="revenue-kpi-value" id="rev-payment-count">0</div>
+                        <div class="revenue-kpi-sub">in + out</div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="panel revenue-wallets-panel">
+                <h2>🧳 Agent Wallet Balances</h2>
+                <p class="panel-sub">Real-time ALGO balances for each autonomous agent wallet.</p>
+                <div class="revenue-wallets-grid" id="rev-wallets-grid">
+                    <div class="revenue-wallet-card skeleton">
+                        <div class="rwc-name">Monitor Agent</div>
+                        <div class="rwc-address" id="rwc-monitor-addr">Loading...</div>
+                        <div class="rwc-balance" id="rwc-monitor-bal">—</div>
+                    </div>
+                    <div class="revenue-wallet-card skeleton">
+                        <div class="rwc-name">Reporting Agent</div>
+                        <div class="rwc-address" id="rwc-reporting-addr">Loading...</div>
+                        <div class="rwc-balance" id="rwc-reporting-bal">—</div>
+                    </div>
+                    <div class="revenue-wallet-card skeleton">
+                        <div class="rwc-name">Policy Agent</div>
+                        <div class="rwc-address" id="rwc-policy-addr">Loading...</div>
+                        <div class="rwc-balance" id="rwc-policy-bal">—</div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="panel revenue-earnings-panel">
+                <h2>💸 Earnings by Agent</h2>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Agent</th>
+                                <th>ALGO Earned</th>
+                                <th>Share</th>
+                            </tr>
+                        </thead>
+                        <tbody id="rev-earnings-body">
+                            <tr><td colspan="3" class="lb-empty">No earnings yet</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section class="panel revenue-tx-panel">
+                <dev class="revenue-tx-head">
+                    <h2>📞 Last 10 X402 Payments</h2>
+                    <span class="revenue-subtitle">TX IDs link to Algonode Testnet explorer</span>
+                </dev>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Timestamp</th>
+                                <th>Agent</th>
+                                <th>Direction</th>
+                                <th>Service</th>
+                                <th>Amount (ALGO)</th>
+                                <th>Status</th>
+                                <th>TX ID</th>
+                            </tr>
+                        </thead>
+                        <tbody id="rev-tx-body">
+                            <tr><td colspan="7" class="lb-empty">No X402 payments yet</td></tr>
+                        </tbody>
+                    </table>
                 </div>
             </section>
         </div>
@@ -328,6 +721,10 @@
                 </div>
             </form>
         </dialog>
+
+        <footer class="site-footer">
+            <p>Carbon-focused audit intelligence for resilient supply chain decisions.</p>
+        </footer>
     </main>
 
     <script type="module" src="/static/wallet-connect.js"></script>

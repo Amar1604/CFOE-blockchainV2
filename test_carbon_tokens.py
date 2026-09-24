@@ -30,24 +30,24 @@ def test_carbon_credit_system():
     tm = get_token_manager()
     
     if not bc.connected:
-        print("❌ ERROR: Not connected to Algorand network")
+        print("ERROR: Not connected to Algorand network")
         return
         
     if not bc.wallet_connected:
-        print("❌ ERROR: Wallet not connected")
+        print("ERROR: Wallet not connected")
         print("   Add ALGORAND_PRIVATE_KEY to .env file")
         return
     
-    print(f"✅ Connected to Algorand Testnet")
-    print(f"✅ Wallet: {bc.address}\n")
+    print(f"Connected to Algorand Testnet")
+    print(f"Wallet: {bc.address}\n")
     
     # Check balance
     balance_info = bc.get_balance()
-    print(f"💰 Balance: {balance_info['balance_algo']:.6f} ALGO")
-    print(f"💰 Available: {balance_info['available_algo']:.6f} ALGO\n")
+    print(f"Balance: {balance_info['balance_algo']:.6f} ALGO")
+    print(f"Available: {balance_info['available_algo']:.6f} ALGO\n")
     
     if balance_info['available_algo'] < 1.0:
-        print("⚠️  WARNING: Low balance. Get testnet ALGO from:")
+        print("WARNING: Low balance. Get testnet ALGO from:")
         print("   https://bank.testnet.algorand.network/\n")
     
     # ================================================================== #
@@ -67,10 +67,10 @@ def test_carbon_credit_system():
     )
     
     if not asset_id:
-        print("❌ Token creation failed")
+        print("ERROR: Token creation failed")
         return
     
-    print(f"\n✅ Carbon Credit Token Created!")
+    print(f"\nCarbon Credit Token Created!")
     print(f"   Asset ID: {asset_id}")
     print(f"   Symbol: CCT")
     print(f"   Total Supply: 10,000,000 credits")
@@ -94,14 +94,14 @@ def test_carbon_credit_system():
     )
     
     if tx_id:
-        print(f"\n✅ Credits Issued Successfully!")
+        print(f"\nCredits Issued Successfully!")
         print(f"   Carbon Credits: 5,000 tons CO2eq")
         print(f"   Tokens Issued: 500 CCT")
         print(f"   Rate: 1 CCT = 10 tons CO2eq")
         print(f"   Recipient: {recipient[:16]}...")
         print(f"   TX: {tx_id[:20]}...")
     else:
-        print("❌ Credit issuance failed")
+        print("ERROR: Credit issuance failed")
     
     # ================================================================== #
     # TEST 3: Check Balance
@@ -112,9 +112,9 @@ def test_carbon_credit_system():
     print("-"*70 + "\n")
     
     balance = tm.get_credit_balance(recipient)
-    print(f"💰 Token Balance: {balance['tokens']:,.1f} CCT")
-    print(f"💰 Carbon Credits: {balance['carbon_credits']:,.0f} tons CO2eq")
-    print(f"💰 Rate: 1 CCT = 10 tons CO2eq")
+    print(f"Token Balance: {balance['tokens']:,.1f} CCT")
+    print(f"Carbon Credits: {balance['carbon_credits']:,.0f} tons CO2eq")
+    print(f"Rate: 1 CCT = 10 tons CO2eq")
     
     # ================================================================== #
     # TEST 4: Retire Credits
@@ -131,14 +131,14 @@ def test_carbon_credit_system():
     )
     
     if tx_id:
-        print(f"\n✅ Credits Retired Successfully!")
+        print(f"\nCredits Retired Successfully!")
         print(f"   Carbon Credits: 1,000 tons CO2eq")
         print(f"   Tokens Retired: 100 CCT")
         print(f"   Rate: 1 CCT = 10 tons CO2eq")
         print(f"   Status: PERMANENTLY RETIRED")
         print(f"   TX: {tx_id[:20]}...")
     else:
-        print("❌ Credit retirement failed")
+        print("ERROR: Credit retirement failed")
     
     # ================================================================== #
     # TEST 5: Create Audit Certificate NFT
@@ -158,13 +158,13 @@ def test_carbon_credit_system():
     )
     
     if nft_id:
-        print(f"\n✅ Audit Certificate NFT Created!")
+        print(f"\nAudit Certificate NFT Created!")
         print(f"   Asset ID: {nft_id}")
         print(f"   Supplier: GreenCorp Manufacturing")
         print(f"   Risk Score: 0.25 (Low Risk)")
         print(f"   Type: 1-of-1 Unique NFT")
     else:
-        print("❌ NFT creation failed")
+        print("ERROR: NFT creation failed")
     
     # ================================================================== #
     # SUMMARY
@@ -180,29 +180,29 @@ def test_carbon_credit_system():
     print("  ALL TESTS COMPLETED")
     print("="*70 + "\n")
     
-    print("📊 Token Operations:")
-    print(f"   ✅ Carbon Credit Token Created (Asset ID: {asset_id})")
-    print(f"   ✅ Credits Issued: {len(tm.issued_credits)} transactions")
-    print(f"   ✅ Credits Retired: {len(tm.retired_credits)} transactions")
-    print(f"   ✅ Audit NFTs Created: {len(tm.audit_nfts)}")
+    print("Token Operations:")
+    print(f"   Carbon Credit Token Created (Asset ID: {asset_id})")
+    print(f"   Credits Issued: {len(tm.issued_credits)} transactions")
+    print(f"   Credits Retired: {len(tm.retired_credits)} transactions")
+    print(f"   Audit NFTs Created: {len(tm.audit_nfts)}")
     
     total_credits_issued = sum(r["carbon_credits"] for r in tm.issued_credits)
     total_tokens_issued = sum(r["tokens_issued"] for r in tm.issued_credits)
     total_credits_retired = sum(r["carbon_credits"] for r in tm.retired_credits)
     total_tokens_retired = sum(r["tokens_retired"] for r in tm.retired_credits)
     
-    print(f"\n💰 Credit Statistics:")
+    print(f"\nCredit Statistics:")
     print(f"   Issued: {total_credits_issued:,.0f} tons CO2eq = {total_tokens_issued:,.1f} CCT")
     print(f"   Retired: {total_credits_retired:,.0f} tons CO2eq = {total_tokens_retired:,.1f} CCT")
     print(f"   Circulating: {total_credits_issued - total_credits_retired:,.0f} tons = {total_tokens_issued - total_tokens_retired:,.1f} CCT")
     print(f"   Rate: 1 CCT = 10 tons CO2eq")
     
-    print("\n🔗 View on Algorand Explorer:")
-    print(f"   Token: https://testnet.algoexplorer.io/asset/{asset_id}")
+    print("\nView on Algorand Explorer:")
+    print(f"   Token: https://lora.algokit.io/testnet/asset/{asset_id}")
     if nft_id:
-        print(f"   NFT: https://testnet.algoexplorer.io/asset/{nft_id}")
+        print(f"   NFT: https://lora.algokit.io/testnet/asset/{nft_id}")
     
-    print("\n✅ Carbon Credit Token System Working!\n")
+    print("\nCarbon Credit Token System Working!\n")
 
 
 if __name__ == "__main__":

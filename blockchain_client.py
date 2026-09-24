@@ -18,12 +18,18 @@ Usage:
 import os
 import hashlib
 import json
+import threading
 import time
 from datetime import datetime
+from pathlib import Path
 from typing import Optional, Dict, Any, List
 from dotenv import load_dotenv
 
 load_dotenv()
+
+# Persistent ledger file — survives server restarts and fresh device setups
+_LEDGER_PATH = Path(__file__).resolve().parent / "data" / "blockchain_ledger.json"
+_ledger_lock = threading.Lock()
 
 
 class CfoEBlockchainClient:
@@ -47,9 +53,49 @@ class CfoEBlockchainClient:
         self.wallet_connected = False
 
         # In-memory ledger (mirrors on-chain records)
+        # Loaded from disk on startup so data survives server restarts
         self.score_anchors: List[Dict] = []
         self.hitl_decisions: List[Dict] = []
         self.report_hashes: List[Dict] = []
+        self._load_ledger()
+
+    # ================================================================== #
+    #  PERSISTENCE
+    # ================================================================== #
+
+    def _load_ledger(self) -> None:
+        """Load the blockchain audit trail from disk."""
+        with _ledger_lock:
+            try:
+                if _LEDGER_PATH.exists():
+                    raw = _LEDGER_PATH.read_text(encoding="utf-8").strip()
+                    if raw:
+                        data = json.loads(raw)
+                        self.score_anchors = data.get("score_anchors", [])
+                        self.hitl_decisions = data.get("hitl_decisions", [])
+                        self.report_hashes = data.get("report_hashes", [])
+                        total = len(self.score_anchors) + len(self.hitl_decisions) + len(self.report_hashes)
+                        if total:
+                            print(f"  [Blockchain] Loaded {total} records from ledger")
+            except (json.JSONDecodeError, OSError) as exc:
+                print(f"  [Blockchain] WARNING: Could not load ledger: {exc}")
+
+    def _save_ledger(self) -> None:
+        """Persist the blockchain audit trail to disk."""
+        with _ledger_lock:
+            try:
+                _LEDGER_PATH.parent.mkdir(parents=True, exist_ok=True)
+                payload = {
+                    "score_anchors": self.score_anchors,
+                    "hitl_decisions": self.hitl_decisions,
+                    "report_hashes": self.report_hashes,
+                }
+                _LEDGER_PATH.write_text(
+                    json.dumps(payload, indent=2, default=str),
+                    encoding="utf-8",
+                )
+            except OSError as exc:
+                print(f"  [Blockchain] WARNING: Could not save ledger: {exc}")
 
     # ================================================================== #
     #  CONNECTION
@@ -68,6 +114,7 @@ class CfoEBlockchainClient:
                     "", self.algod_server, headers={"User-Agent": "algosdk"}
                 )
 
+            # Test connection
             status = self.algod_client.status()
             self.connected = True
             print(f"  [Blockchain] Connected to Algorand (round {status.get('last-round', 'N/A')})")
@@ -77,10 +124,12 @@ class CfoEBlockchainClient:
             if env_key:
                 try:
                     # Derive address from private key
-                    self.address = account.address_from_private_key(env_key)
+                    derived_address = account.address_from_private_key(env_key)
+                    self.address = derived_address
                     self.private_key = env_key
                     self.wallet_connected = True
-                    print(f"  [Blockchain] Wallet auto-connected from .env: {self.address[:16]}...")
+                    print(f"  [Blockchain] Wallet auto-connected from .env")
+                    print(f"  [Blockchain] Address: {self.address}")
                 except Exception as e:
                     print(f"  [Blockchain] WARNING: Invalid ALGORAND_PRIVATE_KEY in .env: {e}")
             
@@ -92,6 +141,7 @@ class CfoEBlockchainClient:
             return False
         except Exception as e:
             print(f"  [Blockchain] WARNING: Connection failed: {e}")
+            print(f"  [Blockchain] Continuing in offline mode - transactions will be stored locally")
             self.connected = False
             return False
 
@@ -265,13 +315,14 @@ class CfoEBlockchainClient:
             "timestamp": timestamp,
         }
         self.score_anchors.append(record)
+        self._save_ledger()
 
         if on_chain:
             print(f"  [Blockchain] SCORE ANCHORED on-chain")
             print(f"               Supplier:  {supplier_name}")
             print(f"               Score:     {risk_score:.2f} ({classification})")
             print(f"               Data Hash: {data_hash[:16]}...")
-            print(f"               TX:        {tx_id[:20]}...")
+            print(f"               TX:        {tx_id}")
         else:
             local_id = f"SCORE-{len(self.score_anchors):04d}"
             record["local_id"] = local_id
@@ -354,6 +405,7 @@ class CfoEBlockchainClient:
             "cryptographic_proof": on_chain,  # TX signature = proof
         }
         self.hitl_decisions.append(record)
+        self._save_ledger()
 
         if on_chain:
             print(f"  [Blockchain] HITL DECISION recorded on-chain")
@@ -362,7 +414,7 @@ class CfoEBlockchainClient:
             print(f"               Score:    {risk_score:.2f}")
             if self.address:
                 print(f"               Auditor:  {self.address[:16]}...")
-            print(f"               TX:       {tx_id[:20]}...")
+            print(f"               TX:       {tx_id}")
             print(f"               Crypto Proof: TX signed by auditor wallet")
         else:
             local_id = f"HITL-{len(self.hitl_decisions):04d}"
@@ -446,6 +498,7 @@ class CfoEBlockchainClient:
             },
         }
         self.report_hashes.append(record)
+        self._save_ledger()
 
         if on_chain:
             print(f"  [Blockchain] REPORT HASH registered on-chain")
@@ -453,11 +506,11 @@ class CfoEBlockchainClient:
             print(f"               SHA-256:      {report_hash[:24]}...")
             print(f"               Verify Code:  {verification_code}")
             print(f"               Report Size:  {len(report_text)} chars")
-            print(f"               TX:           {tx_id[:20]}...")
+            print(f"               TX:           {tx_id}")
             print(f"               Chain of Custody:")
             print(f"                 1. Score:  {(score_anchor_tx or 'N/A')[:20]}...")
             print(f"                 2. HITL:   {(hitl_decision_tx or 'N/A')[:20]}...")
-            print(f"                 3. Report: {tx_id[:20]}...")
+            print(f"                 3. Report: {tx_id}")
         else:
             local_id = f"REPORT-{len(self.report_hashes):04d}"
             record["local_id"] = local_id
@@ -504,7 +557,7 @@ class CfoEBlockchainClient:
         supplier_name: str,
         audit_id: str,
         credits_earned: int,
-        badges_earned: list[str],
+        badges_earned: List[str],
         total_credits: int,
         esg_score: float,
         streak_bonus: int = 0,
@@ -570,7 +623,7 @@ class CfoEBlockchainClient:
             print(f"               Credits:   +{credits_earned + streak_bonus + improvement_bonus}")
             print(f"               Total:     {total_credits}")
             print(f"               Badges:    {', '.join(badges_earned) if badges_earned else 'None'}")
-            print(f"               TX:        {tx_id[:20]}...")
+            print(f"               TX:        {tx_id}")
         else:
             local_id = f"CREDITS-{int(datetime.now().timestamp())}"
             record["local_id"] = local_id

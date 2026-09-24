@@ -5,7 +5,7 @@ Convert Algorand 25-word mnemonic phrase to private key
 from algosdk import mnemonic, account
 
 # Paste your 25-word mnemonic phrase here (keep the quotes)
-MNEMONIC = "fish gate behind witness citizen insane rubber strike toss lift skull demand prize soap joke client curtain scale distance buddy raw glove above abstract question"
+MNEMONIC = ""
 
 # Convert mnemonic to private key
 private_key = mnemonic.to_private_key(MNEMONIC)

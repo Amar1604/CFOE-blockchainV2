@@ -1,0 +1,5 @@
+declare const DEFLY_WALLET_LOCAL_STORAGE_KEYS: {
+    WALLET: string;
+    WALLETCONNECT: string;
+};
+export { DEFLY_WALLET_LOCAL_STORAGE_KEYS };

@@ -55,12 +55,12 @@ def verify_credits():
     print("\n1. Check blockchain transactions:")
     print("   - Each audit creates a 'CfoE_CARBON_CREDITS' transaction")
     print("   - Transaction contains: credits earned, badges, total balance")
-    print("   - View on: https://testnet.algoexplorer.io/address/[YOUR_ADDRESS]")
+    print("   - View on: https://lora.algokit.io/testnet/address/[YOUR_ADDRESS]")
     
     if bc.wallet_connected and bc.address:
         print(f"\n2. Your wallet address:")
         print(f"   {bc.address}")
-        print(f"   https://testnet.algoexplorer.io/address/{bc.address}")
+        print(f"   https://lora.algokit.io/testnet/address/{bc.address}")
     
     print("\n3. Look for transactions with note type: 'CfoE_CARBON_CREDITS'")
     print("   - Each transaction shows credits awarded per audit")

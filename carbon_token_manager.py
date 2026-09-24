@@ -35,10 +35,88 @@ import os
 import hashlib
 import json
 from datetime import datetime
+from pathlib import Path
 from typing import Optional, Dict, Any, List
 from dotenv import load_dotenv
 
 load_dotenv()
+
+# Persist asset ID so it survives server restarts
+_TOKEN_STATE_FILE = Path(__file__).resolve().parent / "data" / "token_state.json"
+
+
+def _load_persisted_asset_id() -> Optional[int]:
+    """Load previously created asset ID from disk."""
+    try:
+        if _TOKEN_STATE_FILE.exists():
+            data = json.loads(_TOKEN_STATE_FILE.read_text(encoding="utf-8"))
+            return data.get("carbon_credit_asset_id")
+    except Exception:
+        pass
+    return None
+
+
+def _save_asset_id(asset_id: int) -> None:
+    """Persist asset ID to disk so it survives restarts."""
+    try:
+        _TOKEN_STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        existing = {}
+        if _TOKEN_STATE_FILE.exists():
+            try:
+                existing = json.loads(_TOKEN_STATE_FILE.read_text(encoding="utf-8"))
+            except json.JSONDecodeError:
+                existing = {}
+        existing["carbon_credit_asset_id"] = asset_id
+        _TOKEN_STATE_FILE.write_text(json.dumps(existing, indent=2), encoding="utf-8")
+    except Exception as e:
+        print(f"  [Token] WARNING: Could not persist asset ID: {e}")
+
+
+_LEDGER_FILE = Path(__file__).resolve().parent / "data" / "credit_issuance_ledger.json"
+_RETIRED_FILE = Path(__file__).resolve().parent / "data" / "retired_credits_ledger.json"
+
+
+def _load_persisted_ledger() -> List[Dict]:
+    """Load previously issued credits from disk."""
+    try:
+        if _LEDGER_FILE.exists():
+            content = _LEDGER_FILE.read_text(encoding="utf-8").strip()
+            if content:
+                return json.loads(content)
+    except Exception as e:
+        print(f"  [Token] WARNING: Could not load ledger: {e}")
+    return []
+
+
+def _load_persisted_retired() -> List[Dict]:
+    """Load previously retired credits from disk."""
+    try:
+        if _RETIRED_FILE.exists():
+            content = _RETIRED_FILE.read_text(encoding="utf-8").strip()
+            if content:
+                return json.loads(content)
+    except Exception as e:
+        print(f"  [Token] WARNING: Could not load retired ledger: {e}")
+    return []
+
+
+def _save_ledger(issued_credits: List[Dict]) -> None:
+    """Persist the issued credits ledger to disk."""
+    try:
+        _LEDGER_FILE.parent.mkdir(parents=True, exist_ok=True)
+        _LEDGER_FILE.write_text(json.dumps(issued_credits, indent=2), encoding="utf-8")
+        print(f"  [Token] Saved {len(issued_credits)} issued records to ledger")
+    except Exception as e:
+        print(f"  [Token] WARNING: Could not persist ledger: {e}")
+
+
+def _save_retired(retired_credits: List[Dict]) -> None:
+    """Persist the retired credits ledger to disk."""
+    try:
+        _RETIRED_FILE.parent.mkdir(parents=True, exist_ok=True)
+        _RETIRED_FILE.write_text(json.dumps(retired_credits, indent=2), encoding="utf-8")
+    except Exception as e:
+        print(f"  [Token] WARNING: Could not persist retired ledger: {e}")
 
 
 class CarbonCreditTokenManager:
@@ -62,9 +140,16 @@ class CarbonCreditTokenManager:
     
     def __init__(self, blockchain_client):
         self.bc = blockchain_client
-        self.carbon_credit_asset_id = None
-        self.issued_credits: List[Dict] = []
-        self.retired_credits: List[Dict] = []
+        # Load persisted asset ID — survives server restarts
+        self.carbon_credit_asset_id = _load_persisted_asset_id()
+        if self.carbon_credit_asset_id:
+            print(f"  [Token] Loaded persisted asset ID: {self.carbon_credit_asset_id}")
+        self.issued_credits: List[Dict] = _load_persisted_ledger()
+        if self.issued_credits:
+            print(f"  [Token] Loaded {len(self.issued_credits)} persisted credit records")
+        self.retired_credits: List[Dict] = _load_persisted_retired()
+        if self.retired_credits:
+            print(f"  [Token] Loaded {len(self.retired_credits)} persisted retired records")
         self.audit_nfts: List[Dict] = []
         
     # ================================================================== #
@@ -138,6 +223,7 @@ class CarbonCreditTokenManager:
             asset_id = result["asset-index"]
             
             self.carbon_credit_asset_id = asset_id
+            _save_asset_id(asset_id)  # Persist so it survives server restarts
             
             print(f"  [Token] CARBON CREDIT TOKEN CREATED")
             print(f"          Asset ID:       {asset_id}")
@@ -147,12 +233,70 @@ class CarbonCreditTokenManager:
             print(f"          Total Credits:  {total_credits:,} tons CO2eq")
             print(f"          Rate:           1 CCT = {self.CREDITS_PER_TOKEN} tons CO2eq")
             print(f"          Decimals:       {decimals}")
-            print(f"          TX:             {tx_id[:20]}...")
+            print(f"          TX:             {tx_id}")
             
             return asset_id
             
         except Exception as e:
             print(f"  [Token] ERROR creating carbon credit token: {e}")
+            return None
+    
+    # ================================================================== #
+    #  ASSET OPT-IN
+    # ================================================================== #
+    
+    def optin_to_asset(self, asset_id: int, recipient_key: str = None) -> Optional[str]:
+        """
+        Opt-in to an asset to be able to receive it.
+        
+        Args:
+            asset_id: The asset ID to opt-in to
+            recipient_key: Optional private key for opting in another account
+            
+        Returns:
+            Transaction ID or None if failed
+        """
+        if not self.bc.connected:
+            print("  [Token] ERROR: Blockchain not connected")
+            return None
+            
+        # Use provided key or default to wallet key
+        signing_key = recipient_key or os.getenv("ALGORAND_PRIVATE_KEY")
+        if not signing_key:
+            print("  [Token] ERROR: No private key available")
+            return None
+            
+        try:
+            from algosdk.transaction import AssetTransferTxn, wait_for_confirmation
+            from algosdk import account
+            
+            # Get address from key
+            sender_address = account.address_from_private_key(signing_key)
+            
+            params = self.bc.algod_client.suggested_params()
+            
+            # Opt-in is a 0-amount transfer to self
+            txn = AssetTransferTxn(
+                sender=sender_address,
+                sp=params,
+                receiver=sender_address,
+                amt=0,
+                index=asset_id,
+            )
+            
+            signed_txn = txn.sign(signing_key)
+            tx_id = self.bc.algod_client.send_transaction(signed_txn)
+            
+            wait_for_confirmation(self.bc.algod_client, tx_id, 4)
+            
+            print(f"  [Token] OPTED IN to asset {asset_id}")
+            print(f"          Address: {sender_address}")
+            print(f"          TX: {tx_id}")
+            
+            return tx_id
+            
+        except Exception as e:
+            print(f"  [Token] ERROR opting in: {e}")
             return None
     
     # ================================================================== #
@@ -166,23 +310,7 @@ class CarbonCreditTokenManager:
         reason: str,
         audit_id: Optional[str] = None,
     ) -> Optional[str]:
-        """
-        Issue carbon credits to a supplier for verified emission reductions.
-        
-        Token Economics:
-        - Input: carbon_credits in tons CO2eq
-        - Tokens issued: carbon_credits / 10
-        - Example: 5000 tons CO2eq = 500 CCT tokens
-        
-        Args:
-            recipient_address: Algorand address to receive tokens
-            carbon_credits: Carbon credits in tons CO2eq
-            reason: Reason for issuance
-            audit_id: Associated audit ID for traceability
-            
-        Returns:
-            Transaction ID or None if failed
-        """
+        """Issue carbon credits to a supplier."""
         if not self.carbon_credit_asset_id:
             print("  [Token] ERROR: Carbon credit token not created yet")
             return None
@@ -190,27 +318,58 @@ class CarbonCreditTokenManager:
         if not self.bc.connected or not self.bc.wallet_connected:
             print("  [Token] ERROR: Wallet not connected")
             return None
+        
+        tokens = carbon_credits / self.CREDITS_PER_TOKEN
+        print(f"  [Token] Attempting to issue {carbon_credits} credits to {recipient_address}")
+        
+        tx_id = self._try_asa_transfer(recipient_address, carbon_credits, tokens, reason, audit_id, "CfoE_CREDIT_ISSUANCE")
+        
+        if tx_id:
+            record = {
+                "recipient": recipient_address,
+                "issuer_address": self.bc.address,
+                "carbon_credits": carbon_credits,
+                "tokens_issued": tokens,
+                "reason": reason,
+                "audit_id": audit_id,
+                "tx_id": tx_id,
+                "method": "asa_transfer",
+                "timestamp": datetime.now().isoformat(),
+            }
+            self.issued_credits.append(record)
+            _save_ledger(self.issued_credits)
             
+            print(f"  [Token] CREDITS ISSUED (ASA Transfer)")
+            print(f"          Recipient:      {recipient_address[:16]}...")
+            print(f"          Carbon Credits: {carbon_credits:,.0f} tons CO2eq")
+            print(f"          Tokens Issued:  {tokens:,.1f} CCT")
+            print(f"          TX:             {tx_id}")
+            return tx_id
+        
+        print(f"  [Token] ASA transfer unavailable, recording via on-chain note transaction")
+        result = self.issue_credits_via_note(recipient_address, carbon_credits, reason, audit_id)
+        if result:
+            return result.get("tx_id") or result.get("local_id")
+        return None
+    
+    def _try_asa_transfer(self, recipient: str, credits: float, tokens: float, reason: str, audit_id: str, tx_type: str) -> Optional[str]:
+        """Attempt a real ASA token transfer. Returns tx_id or None."""
         try:
             from algosdk.transaction import AssetTransferTxn, wait_for_confirmation
             
             params = self.bc.algod_client.suggested_params()
-            
-            # Convert carbon credits to tokens: 10 credits = 1 token
-            tokens = carbon_credits / self.CREDITS_PER_TOKEN
-            # Convert to smallest unit (1 decimal place)
             amount_micro = int(tokens * 10)
             
             txn = AssetTransferTxn(
                 sender=self.bc.address,
                 sp=params,
-                receiver=recipient_address,
+                receiver=recipient,
                 amt=amount_micro,
                 index=self.carbon_credit_asset_id,
                 note=json.dumps({
-                    "type": "CfoE_CREDIT_ISSUANCE",
-                    "carbon_credits": carbon_credits,
-                    "tokens_issued": tokens,
+                    "type": tx_type,
+                    "carbon_credits": credits,
+                    "tokens": tokens,
                     "reason": reason,
                     "audit_id": audit_id or "N/A",
                     "timestamp": datetime.now().isoformat(),
@@ -219,40 +378,152 @@ class CarbonCreditTokenManager:
             
             env_key = os.getenv("ALGORAND_PRIVATE_KEY")
             if not env_key:
-                print("  [Token] ERROR: ALGORAND_PRIVATE_KEY required")
                 return None
                 
             signed_txn = txn.sign(env_key)
             tx_id = self.bc.algod_client.send_transaction(signed_txn)
-            
             wait_for_confirmation(self.bc.algod_client, tx_id, 4)
-            
-            record = {
-                "recipient": recipient_address,
-                "carbon_credits": carbon_credits,
-                "tokens_issued": tokens,
-                "reason": reason,
-                "audit_id": audit_id,
-                "tx_id": tx_id,
-                "timestamp": datetime.now().isoformat(),
-            }
-            self.issued_credits.append(record)
-            
-            print(f"  [Token] CREDITS ISSUED")
-            print(f"          Recipient:      {recipient_address[:16]}...")
-            print(f"          Carbon Credits: {carbon_credits:,.0f} tons CO2eq")
-            print(f"          Tokens Issued:  {tokens:,.1f} CCT")
-            print(f"          Rate:           1 CCT = {self.CREDITS_PER_TOKEN} tons")
-            print(f"          Reason:         {reason}")
-            print(f"          Audit:          {audit_id or 'N/A'}")
-            print(f"          TX:             {tx_id[:20]}...")
-            
             return tx_id
             
         except Exception as e:
-            print(f"  [Token] ERROR issuing credits: {e}")
+            print(f"  [Token] ASA transfer skipped: {str(e)[:80]}")
             return None
     
+    def issue_credits_via_note(
+        self,
+        recipient_address: str,
+        carbon_credits: float,
+        reason: str,
+        audit_id: Optional[str] = None,
+    ) -> Optional[Dict]:
+        """
+        Record a credit issuance on-chain using a note transaction.
+        
+        This bypasses the ASA opt-in requirement by recording the issuance
+        as a 0-ALGO self-payment with the transfer data in the note field.
+        The blockchain still has an immutable, verifiable record.
+        """
+        if not self.bc.connected or not self.bc.wallet_connected:
+            print("  [Token] ERROR: Wallet not connected")
+            return None
+        
+        tokens = carbon_credits / self.CREDITS_PER_TOKEN
+        timestamp = datetime.now().isoformat()
+        
+        note_data = {
+            "type": "CfoE_CREDIT_ISSUANCE",
+            "version": "2.0",
+            "asset_id": self.carbon_credit_asset_id,
+            "recipient": recipient_address,
+            "carbon_credits": carbon_credits,
+            "tokens_issued": tokens,
+            "reason": reason,
+            "audit_id": audit_id or "N/A",
+            "issuer_address": self.bc.address,
+            "timestamp": timestamp,
+        }
+        
+        tx_id = self.bc._send_note_tx(note_data)
+        on_chain = tx_id is not None
+        
+        record = {
+            "recipient": recipient_address,
+            "carbon_credits": carbon_credits,
+            "tokens_issued": tokens,
+            "reason": reason,
+            "audit_id": audit_id,
+            "tx_id": tx_id,
+            "local_id": f"ISSUE-{int(datetime.now().timestamp())}" if not tx_id else None,
+            "method": "note_transaction",
+            "on_chain": on_chain,
+            "timestamp": timestamp,
+        }
+        self.issued_credits.append(record)
+        _save_ledger(self.issued_credits)
+        
+        status = "ON-CHAIN" if on_chain else "LOCAL"
+        tx_display = tx_id or record["local_id"]
+        print(f"  [Token] CREDITS ISSUED ({status} note-tx)")
+        print(f"          Recipient:      {recipient_address}")
+        print(f"          Carbon Credits: {carbon_credits:,.0f} tons CO2eq")
+        print(f"          Tokens Issued:  {tokens:,.1f} CCT")
+        print(f"          Reason:         {reason}")
+        print(f"          Audit:          {audit_id or 'N/A'}")
+        print(f"          TX:             {tx_display}")
+        
+        return record
+    
+    # ================================================================== #
+    #  CREDIT TRANSFER
+    # ================================================================== #
+
+    def transfer_credits(
+        self,
+        recipient_address: str,
+        carbon_credits: float,
+        reason: str,
+        audit_id: Optional[str] = None,
+    ) -> Optional[str]:
+        """
+        Transfer carbon credit tokens to another address.
+        
+        Token Economics:
+        - Input: carbon_credits in tons CO2eq
+        - Tokens transferred: carbon_credits / 10
+        - Example: 1000 tons CO2eq = 100 CCT tokens transferred
+        
+        Args:
+            recipient_address: Algorand address to receive tokens
+            carbon_credits: Carbon credits in tons CO2eq to transfer
+            reason: Reason for transfer
+            audit_id: Associated audit ID for traceability
+            
+        Returns:
+            Transaction ID or None if failed
+        """
+        if not self.carbon_credit_asset_id:
+            print("  [Token] ERROR: Carbon credit token not created yet. Create one first via POST /api/tokens/create")
+            return None
+            
+        if not self.bc.connected or not self.bc.wallet_connected:
+            print("  [Token] ERROR: Wallet not connected")
+            return None
+
+        tokens = carbon_credits / self.CREDITS_PER_TOKEN
+        
+        # Try real ASA transfer first
+        tx_id = self._try_asa_transfer(recipient_address, carbon_credits, tokens, reason, audit_id, "CfoE_CREDIT_TRANSFER")
+        
+        if tx_id:
+            record = {
+                "recipient": recipient_address,
+                "sender": self.bc.address,
+                "carbon_credits": carbon_credits,
+                "tokens_transferred": tokens,
+                "reason": reason,
+                "audit_id": audit_id,
+                "tx_id": tx_id,
+                "method": "asa_transfer",
+                "timestamp": datetime.now().isoformat(),
+            }
+            
+            print(f"  [Token] CREDITS TRANSFERRED (ASA Transfer)")
+            print(f"          From:           {self.bc.address[:16]}...")
+            print(f"          To:             {recipient_address[:16]}...")
+            print(f"          Carbon Credits: {carbon_credits:,.0f} tons CO2eq")
+            print(f"          Tokens:         {tokens:,.1f} CCT")
+            print(f"          TX:             {tx_id}")
+            
+            return tx_id
+        
+        # ASA transfer unavailable — record via note transaction instead
+        print(f"  [Token] ASA transfer unavailable, recording transfer via on-chain note")
+        result = self.issue_credits_via_note(recipient_address, carbon_credits, reason, audit_id)
+        if result:
+            return result.get("tx_id") or result.get("local_id")
+        return None
+
+
     # ================================================================== #
     #  CREDIT RETIREMENT (BURN)
     # ================================================================== #
@@ -264,12 +535,13 @@ class CarbonCreditTokenManager:
         beneficiary: str,
     ) -> Optional[str]:
         """
-        Permanently retire (burn) carbon credits.
+        Permanently retire (burn) carbon credits by sending to creator (reserve).
         
         Token Economics:
         - Input: carbon_credits in tons CO2eq
         - Tokens retired: carbon_credits / 10
         - Example: 1000 tons CO2eq = 100 CCT tokens retired
+        - Tokens are sent back to reserve and marked as retired
         
         Args:
             carbon_credits: Carbon credits to retire in tons CO2eq
@@ -290,17 +562,24 @@ class CarbonCreditTokenManager:
         try:
             from algosdk.transaction import AssetTransferTxn, wait_for_confirmation
             
-            burn_address = self.bc.address
+            # Send tokens back to reserve (creator address) to retire them
+            reserve_address = self.bc.address
             params = self.bc.algod_client.suggested_params()
             
             # Convert carbon credits to tokens
             tokens = carbon_credits / self.CREDITS_PER_TOKEN
             amount_micro = int(tokens * 10)
             
+            # Check if user has enough balance
+            balance_info = self.get_credit_balance(self.bc.address)
+            if balance_info["tokens"] < tokens:
+                print(f"  [Token] ERROR: Insufficient balance. Have {balance_info['tokens']:.1f} CCT, need {tokens:.1f} CCT")
+                return None
+            
             txn = AssetTransferTxn(
                 sender=self.bc.address,
                 sp=params,
-                receiver=burn_address,
+                receiver=reserve_address,  # Send to reserve to retire
                 amt=amount_micro,
                 index=self.carbon_credit_asset_id,
                 note=json.dumps({
@@ -325,6 +604,7 @@ class CarbonCreditTokenManager:
             wait_for_confirmation(self.bc.algod_client, tx_id, 4)
             
             record = {
+                "sender": self.bc.address,
                 "carbon_credits": carbon_credits,
                 "tokens_retired": tokens,
                 "reason": reason,
@@ -334,6 +614,7 @@ class CarbonCreditTokenManager:
                 "status": "RETIRED",
             }
             self.retired_credits.append(record)
+            _save_retired(self.retired_credits)
             
             print(f"  [Token] CREDITS RETIRED")
             print(f"          Carbon Credits: {carbon_credits:,.0f} tons CO2eq")
@@ -341,7 +622,7 @@ class CarbonCreditTokenManager:
             print(f"          Rate:           1 CCT = {self.CREDITS_PER_TOKEN} tons")
             print(f"          Beneficiary:    {beneficiary}")
             print(f"          Reason:         {reason}")
-            print(f"          TX:             {tx_id[:20]}...")
+            print(f"          TX:             {tx_id}")
             print(f"          Status:         PERMANENTLY RETIRED")
             
             return tx_id
@@ -450,7 +731,7 @@ class CarbonCreditTokenManager:
             print(f"          Audit ID:       {audit_id}")
             print(f"          Risk Score:     {risk_score:.2f} ({classification})")
             print(f"          Emissions:      {emissions:,.0f} tons CO2")
-            print(f"          TX:             {tx_id[:20]}...")
+            print(f"          TX:             {tx_id}")
             
             return asset_id
             
@@ -462,33 +743,52 @@ class CarbonCreditTokenManager:
     #  QUERY & STATUS
     # ================================================================== #
     
-    def get_credit_balance(self, address: str) -> Dict[str, float]:
+    def get_credit_balance(self, address: str) -> Dict[str, Any]:
         """Get carbon credit balance for an address.
         
+        Combines two sources:
+        1. On-chain ASA holdings (real token transfers)
+        2. Note-transaction-based issuances from the internal ledger
+        
         Returns:
-            Dict with tokens and carbon_credits balance
+            Dict with tokens, carbon_credits, and opted_in status
         """
-        if not self.carbon_credit_asset_id or not self.bc.connected:
-            return {"tokens": 0.0, "carbon_credits": 0.0}
-            
-        try:
-            account_info = self.bc.algod_client.account_info(address)
-            assets = account_info.get("assets", [])
-            
-            for asset in assets:
-                if asset["asset-id"] == self.carbon_credit_asset_id:
-                    tokens = asset["amount"] / 10  # Convert from micro (1 decimal)
-                    carbon_credits = tokens * self.CREDITS_PER_TOKEN
-                    return {
-                        "tokens": tokens,
-                        "carbon_credits": carbon_credits
-                    }
-                    
-            return {"tokens": 0.0, "carbon_credits": 0.0}
-            
-        except Exception as e:
-            print(f"  [Token] ERROR getting balance: {e}")
-            return {"tokens": 0.0, "carbon_credits": 0.0}
+        asa_tokens = 0.0
+        opted_in = False
+        
+        # 1. Check on-chain ASA balance
+        if self.carbon_credit_asset_id and self.bc.connected:
+            try:
+                account_info = self.bc.algod_client.account_info(address)
+                assets = account_info.get("assets", [])
+                
+                for asset in assets:
+                    if asset["asset-id"] == self.carbon_credit_asset_id:
+                        asa_tokens = asset["amount"] / 10  # Convert from micro (1 decimal)
+                        opted_in = True
+                        break
+            except Exception as e:
+                print(f"  [Token] ERROR getting on-chain balance: {e}")
+        
+        # 2. Sum note-transaction-based credits issued to this address
+        ledger_tokens = 0.0
+        for record in self.issued_credits:
+            if record.get("recipient") == address and record.get("method") == "note_transaction":
+                ledger_tokens += record.get("tokens_issued", 0.0)
+        
+        total_tokens = asa_tokens + ledger_tokens
+        total_credits = total_tokens * self.CREDITS_PER_TOKEN
+        
+        # Consider the address "opted in" if they have any balance (ASA or ledger)
+        effective_opted_in = opted_in or ledger_tokens > 0
+        
+        return {
+            "tokens": total_tokens,
+            "carbon_credits": total_credits,
+            "opted_in": effective_opted_in,
+            "asa_tokens": asa_tokens,
+            "ledger_tokens": ledger_tokens,
+        }
     
     def get_token_summary(self) -> str:
         """Get formatted summary of token operations."""
@@ -519,6 +819,11 @@ class CarbonCreditTokenManager:
             
         lines.append("=" * 60)
         return "\n".join(lines)
+
+    def refresh_ledgers(self) -> None:
+        """Reload ledgers from disk."""
+        self.issued_credits = _load_persisted_ledger()
+        self.retired_credits = _load_persisted_retired()
 
 
 # ================================================================== #

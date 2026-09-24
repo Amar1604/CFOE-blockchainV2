@@ -12,7 +12,7 @@ import math
 import random
 import time
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Dict, List, Optional, Tuple
 from uuid import uuid4
 
 import httpx
@@ -27,7 +27,7 @@ SUPPLIER_ID = "SUP-STEELFORGE-001"
 SUPPLIER_NAME = "SteelForge Industries Pvt. Ltd."
 LOCATION = "Pune, Maharashtra, India"
 
-PROCESSES: list[dict[str, Any]] = [
+PROCESSES: List[Dict[str, Any]] = [
     {"name": "Blast Furnace",     "base_co2": 420.0, "weight": 0.45},
     {"name": "Rolling Mill",      "base_co2": 180.0, "weight": 0.20},
     {"name": "Power Generation",  "base_co2":  95.0, "weight": 0.15},
@@ -35,7 +35,7 @@ PROCESSES: list[dict[str, Any]] = [
     {"name": "Logistics",         "base_co2":  55.0, "weight": 0.08},
 ]
 
-VIOLATION_TYPES: list[dict[str, Any]] = [
+VIOLATION_TYPES: List[Dict[str, Any]] = [
     {"type": "EPA_FINE",           "severity": "HIGH",   "description": "EPA emission limit fine — exceeded NOx/SOx thresholds",                "fine": 250_000},
     {"type": "COOLING_DISCHARGE",  "severity": "MEDIUM", "description": "Thermal discharge violation — cooling water above permissible limit",  "fine":  75_000},
     {"type": "PERMIT_DEVIATION",   "severity": "LOW",    "description": "Operating outside environmental permit conditions",                    "fine":  25_000},
@@ -71,15 +71,15 @@ class SimulationState:
         self.running: bool = False
         self.tick_count: int = 0
         self.total_co2_today: float = 0.0
-        self.process_emissions: dict[str, float] = {p["name"]: 0.0 for p in PROCESSES}
-        self.active_violations: list[dict[str, Any]] = []
+        self.process_emissions: Dict[str, float] = {p["name"]: 0.0 for p in PROCESSES}
+        self.active_violations: List[Dict[str, Any]] = []
         self.cumulative_violations: int = 0
         self.esg_score: float = 0.0
         self.spike_active: bool = False
         self.spike_remaining: int = 0
         self.spike_multiplier: float = 1.0
-        self.history: list[dict[str, Any]] = []
-        self.last_audit_result: dict[str, Any] | None = None
+        self.history: List[Dict[str, Any]] = []
+        self.last_audit_result: Optional[Dict[str, Any]] = None
 
 
 state = SimulationState()
@@ -88,7 +88,7 @@ state = SimulationState()
 
 class ConnectionManager:
     def __init__(self) -> None:
-        self.active: list[WebSocket] = []
+        self.active: List[WebSocket] = []
 
     async def connect(self, ws: WebSocket) -> None:
         await ws.accept()
@@ -98,10 +98,14 @@ class ConnectionManager:
         if ws in self.active:
             self.active.remove(ws)
 
-    async def broadcast(self, data: dict[str, Any]) -> None:
-        dead: list[WebSocket] = []
-        for ws in self.active:
+    async def broadcast(self, data: Dict[str, Any]) -> None:
+        dead: List[WebSocket] = []
+        for ws in self.active[:]:
             try:
+                # Check if websocket is still connected
+                if hasattr(ws, 'client_state') and ws.client_state.name != 'CONNECTED':
+                    dead.append(ws)
+                    continue
                 await ws.send_json(data)
             except Exception:
                 dead.append(ws)
@@ -113,7 +117,7 @@ manager = ConnectionManager()
 
 # ── Helpers ───────────────────────────────────────────────────────────
 
-def _current_shift() -> tuple[str, float]:
+def _current_shift() -> Tuple[str, float]:
     """Return (shift_name, multiplier) based on IST hour."""
     hour = (datetime.now(timezone.utc).hour + 5) % 24  # rough IST
     if 6 <= hour < 14:
@@ -132,7 +136,7 @@ def _compute_esg_score() -> float:
     return round(min(emissions_ratio * 0.6 + violation_penalty, 1.0), 4)
 
 
-def _build_snapshot() -> dict[str, Any]:
+def _build_snapshot() -> Dict[str, Any]:
     shift_name, shift_mult = _current_shift()
     # Estimated annual = sum of current daily rates × 365
     current_daily_total = sum(state.process_emissions.values())
@@ -251,26 +255,26 @@ async def ws_endpoint(websocket: WebSocket) -> None:
 # ── REST endpoints ────────────────────────────────────────────────────
 
 @app.post("/simulation/start")
-async def start_simulation() -> dict[str, Any]:
+async def start_simulation() -> Dict[str, Any]:
     state.running = True
     return {"status": "running"}
 
 
 @app.post("/simulation/stop")
-async def stop_simulation() -> dict[str, Any]:
+async def stop_simulation() -> Dict[str, Any]:
     state.running = False
     return {"status": "stopped"}
 
 
 @app.post("/simulation/reset")
-async def reset_simulation() -> dict[str, Any]:
+async def reset_simulation() -> Dict[str, Any]:
     state.reset()
     await manager.broadcast(_build_snapshot())
     return {"status": "reset"}
 
 
 @app.post("/simulation/trigger-spike")
-async def trigger_spike() -> dict[str, Any]:
+async def trigger_spike() -> Dict[str, Any]:
     state.spike_active = True
     state.spike_remaining = 6
     state.spike_multiplier = round(random.uniform(1.4, 2.1), 2)
@@ -278,7 +282,7 @@ async def trigger_spike() -> dict[str, Any]:
 
 
 @app.post("/simulation/trigger-violation")
-async def trigger_violation() -> dict[str, Any]:
+async def trigger_violation() -> Dict[str, Any]:
     entry = {
         "type": "EPA_FINE",
         "severity": "HIGH",
@@ -297,14 +301,14 @@ async def trigger_violation() -> dict[str, Any]:
 
 
 @app.get("/simulation/snapshot")
-async def snapshot() -> dict[str, Any]:
+async def snapshot() -> Dict[str, Any]:
     return _build_snapshot()
 
 
 # ── Audit integration ─────────────────────────────────────────────────
 
 @app.post("/audit/run")
-async def run_audit() -> dict[str, Any]:
+async def run_audit() -> Dict[str, Any]:
     """Pull current snapshot and POST to CfoE /api/audit, broadcast result."""
     snap = _build_snapshot()
 
@@ -351,7 +355,7 @@ async def run_audit() -> dict[str, Any]:
 
 
 @app.get("/audit/history")
-async def get_audit_history() -> dict[str, Any]:
+async def get_audit_history() -> Dict[str, Any]:
     """Fetch audit history from CfoE main system."""
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
